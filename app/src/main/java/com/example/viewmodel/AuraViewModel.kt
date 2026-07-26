@@ -317,8 +317,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private const val DEFAULT_CONTENT_UPDATE_BUDGET_MS = 1000L
-    private const val FREQUENT_UPDATE_BUDGET_MS = 250L
+    private val DEFAULT_CONTENT_UPDATE_BUDGET_MS = 1000L
+    private val FREQUENT_UPDATE_BUDGET_MS = 250L
     private var lastMediaContentUpdateMs = 0L
 
     private fun applyMediaUpdate(track: MediaTrack) {
@@ -384,7 +384,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private val _isNotificationDetailExpanded = MutableStateFlow(false)
     val isNotificationDetailExpanded: StateFlow<Boolean> = _isNotificationDetailExpanded.asStateFlow()
 
-    private const val MIN_MS_BETWEEN_FULL_CYCLES = 1500L
+    private val MIN_MS_BETWEEN_FULL_CYCLES = 1500L
     private var lastFullCollapseMs = 0L
 
     fun setIslandMode(mode: IslandMode, expand: Boolean = true) {
@@ -588,7 +588,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         message: String = "Dynamic Island live popup preview!"
     ) {
         val notif = IslandNotification(
-            shell = NotificationShell(appName = appName),
+            appName = appName,
             sender = sender,
             message = message
         )
