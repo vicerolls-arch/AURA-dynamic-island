@@ -1,0 +1,6 @@
+{
+  "name": "AURA",
+  "description": "Dynamic Island & Personalized Overlay App for Android",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
