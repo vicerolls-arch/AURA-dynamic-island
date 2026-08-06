@@ -268,6 +268,8 @@ class AuraOverlayService : Service() {
                     val isNotificationDetailExpandedState by vm.isNotificationDetailExpanded.collectAsState()
                     val isMediaDetailExpandedState by vm.isMediaDetailExpanded.collectAsState()
                     val secondaryIslandModeState by vm.secondaryIslandMode.collectAsState()
+                    val pendingNotificationCountState by vm.pendingNotificationCount.collectAsState()
+                    val pendingNextNotificationState by vm.pendingNextNotification.collectAsState()
 
                     lastKnownConfig = configState
 
@@ -311,6 +313,8 @@ class AuraOverlayService : Service() {
                             onResetTimer = { vm.resetTimer() },
                             onCollapse = { vm.collapseToCompact() },
                             secondaryMode = secondaryIslandModeState,
+                            pendingNotificationCount = pendingNotificationCountState,
+                            pendingNextNotification = pendingNextNotificationState,
                             onSecondaryClick = { vm.swapPrimaryAndSecondary() },
                             applyPositionOffset = false
                         )

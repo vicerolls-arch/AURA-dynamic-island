@@ -26,8 +26,10 @@ import com.example.model.SavedProfile
 import com.example.model.TimerState
 import com.example.service.AuraEventBus
 import com.example.service.AuraNotificationListenerService
+import com.example.service.AuraInCallService
 import com.example.service.AuraOverlayService
 import com.example.service.AppForegroundTracker
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,6 +68,14 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _secondaryIslandMode = MutableStateFlow<IslandMode?>(null)
     val secondaryIslandMode: StateFlow<IslandMode?> = _secondaryIslandMode.asStateFlow()
+
+    // Notification queue system — prevents rapid flickering
+    private val _notificationQueue = ConcurrentLinkedQueue<IslandNotification>()
+    private var notificationQueueJob: Job? = null
+    private val _pendingNotificationCount = MutableStateFlow(0)
+    val pendingNotificationCount: StateFlow<Int> = _pendingNotificationCount.asStateFlow()
+    private val _pendingNextNotification = MutableStateFlow<IslandNotification?>(null)
+    val pendingNextNotification: StateFlow<IslandNotification?> = _pendingNextNotification.asStateFlow()
 
     private val _config = MutableStateFlow(IslandConfig())
     val config: StateFlow<IslandConfig> = _config.asStateFlow()
@@ -430,13 +440,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
         if (expand && mode != IslandMode.COMPACT) {
             val autoSeconds = _config.value.autoCollapseSeconds
-            if (mode == IslandMode.NOTIFICATION && !_isNotificationDetailExpanded.value) {
-                // Short 4-second auto-collapse timer for mini peek state
-                autoCollapseJob = viewModelScope.launch {
-                    delay(4000L)
-                    collapseToCompact()
-                }
-            } else if (autoSeconds > 0 && mode != IslandMode.MEDIA && mode != IslandMode.TIMER && mode != IslandMode.CALL) {
+            // Notification auto-collapse is handled by the queue processor — skip here
+            if (mode != IslandMode.NOTIFICATION && autoSeconds > 0 && mode != IslandMode.MEDIA && mode != IslandMode.TIMER && mode != IslandMode.CALL) {
                 autoCollapseJob = viewModelScope.launch {
                     delay(autoSeconds * 1000L)
                     collapseToCompact()
@@ -479,6 +484,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         lastFullCollapseMs = System.currentTimeMillis()
         _isExpanded.value = false
         _islandMode.value = IslandMode.COMPACT
+        _isNotificationDetailExpanded.value = false
         updateSecondaryMode()
     }
 
@@ -516,12 +522,21 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun acceptCall() {
         try {
+            // Prefer AuraInCallService for full call control
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val inCallService = AuraInCallService.activeCall
+                if (inCallService != null) {
+                    inCallService.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
+                    collapseToCompact()
+                    return
+                }
+            }
+            // Fallback to TelecomManager
             val context = getApplication<Application>()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val telecomManager = context.getSystemService(android.content.Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
                 telecomManager?.acceptRingingCall()
             } else {
-                // Fallback: launch Phone app
                 val intent = Intent(Intent.ACTION_DIAL).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
                 context.startActivity(intent)
             }
@@ -533,6 +548,16 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun declineCall() {
         try {
+            // Prefer AuraInCallService for full call control
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val activeCall = AuraInCallService.activeCall
+                if (activeCall != null) {
+                    activeCall.reject(false, null)
+                    collapseToCompact()
+                    return
+                }
+            }
+            // Fallback to TelecomManager
             val context = getApplication<Application>()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val telecomManager = context.getSystemService(android.content.Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
@@ -574,10 +599,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun triggerNotificationAlert(notif: IslandNotification) {
-        _currentNotification.value = notif
-        _isNotificationDetailExpanded.value = false
-        setIslandMode(IslandMode.NOTIFICATION, expand = true)
-
+        // Always log to alert history
         viewModelScope.launch {
             alertDao.insertAlert(
                 AlertHistoryEntity(
@@ -587,6 +609,50 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     triggerType = "NOTIFICATION"
                 )
             )
+        }
+
+        // If already showing a notification, queue it instead of interrupting
+        if (_islandMode.value == IslandMode.NOTIFICATION && _isExpanded.value) {
+            _notificationQueue.add(notif)
+            _pendingNotificationCount.value = _notificationQueue.size
+            _pendingNextNotification.value = _notificationQueue.peek()
+            updateSecondaryMode()
+            return
+        }
+
+        // Start showing the first notification
+        _currentNotification.value = notif
+        _isNotificationDetailExpanded.value = false
+        setIslandMode(IslandMode.NOTIFICATION, expand = true)
+        startNotificationQueueProcessor()
+    }
+
+    private fun startNotificationQueueProcessor() {
+        notificationQueueJob?.cancel()
+        notificationQueueJob = viewModelScope.launch {
+            // Show current notification for 2 seconds
+            delay(2000L)
+            // Process queued notifications one by one
+            while (_notificationQueue.isNotEmpty()) {
+                val next = _notificationQueue.poll() ?: break
+                _pendingNotificationCount.value = _notificationQueue.size
+                _pendingNextNotification.value = _notificationQueue.peek()
+                _currentNotification.value = next
+                _isNotificationDetailExpanded.value = false
+                updateSecondaryMode()
+                delay(2000L)
+                // If user expanded detail, wait for collapse
+                while (_isNotificationDetailExpanded.value) {
+                    delay(500L)
+                }
+            }
+            // All notifications displayed — collapse
+            _pendingNotificationCount.value = 0
+            _pendingNextNotification.value = null
+            updateSecondaryMode()
+            if (!_isNotificationDetailExpanded.value) {
+                collapseToCompact()
+            }
         }
     }
 
@@ -903,31 +969,11 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun updateSecondaryMode() {
         val primary = _islandMode.value
-        val isMediaActive = _mediaTrack.value.isPlaying
-        val isTimerActive = _timerState.value.isRunning && _timerState.value.remainingSeconds > 0
-
-        _secondaryIslandMode.value = when {
-            primary == IslandMode.CALL -> {
-                if (isTimerActive) IslandMode.TIMER else if (isMediaActive) IslandMode.MEDIA else null
-            }
-            primary == IslandMode.NOTIFICATION -> {
-                if (isTimerActive) IslandMode.TIMER else if (isMediaActive) IslandMode.MEDIA else null
-            }
-            primary == IslandMode.TIMER -> {
-                if (isMediaActive) IslandMode.MEDIA else null
-            }
-            primary == IslandMode.MEDIA -> {
-                if (isTimerActive) IslandMode.TIMER else null
-            }
-            primary == IslandMode.CHARGING -> {
-                if (isTimerActive) IslandMode.TIMER else if (isMediaActive) IslandMode.MEDIA else null
-            }
-            primary == IslandMode.CUSTOM_TEXT -> {
-                if (isTimerActive) IslandMode.TIMER else if (isMediaActive) IslandMode.MEDIA else null
-            }
-            else -> {
-                null
-            }
+        // Secondary bubble ONLY shows when there are queued pending notifications
+        _secondaryIslandMode.value = if (primary == IslandMode.NOTIFICATION && _pendingNotificationCount.value > 0) {
+            IslandMode.NOTIFICATION
+        } else {
+            null
         }
     }
 

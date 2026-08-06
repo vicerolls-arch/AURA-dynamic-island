@@ -152,6 +152,8 @@ fun DynamicIslandView(
     onResumeTimer: () -> Unit = {},
     onResetTimer: () -> Unit = {},
     secondaryMode: IslandMode? = null,
+    pendingNotificationCount: Int = 0,
+    pendingNextNotification: IslandNotification? = null,
     onSecondaryClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -185,7 +187,7 @@ fun DynamicIslandView(
             IslandMode.COMPACT -> minOf(config.widthDp.dp, screenWidthDp * 0.55f)
             IslandMode.MEDIA -> if (isMediaDetailExpanded) minOf(320.dp, screenWidthDp * 0.86f) else minOf(140.dp, screenWidthDp * 0.42f)
             IslandMode.CALL -> minOf(300.dp, screenWidthDp * 0.84f)
-            IslandMode.NOTIFICATION -> if (isNotificationDetailExpanded) minOf(300.dp, screenWidthDp * 0.86f) else minOf(200.dp, screenWidthDp * 0.58f)
+            IslandMode.NOTIFICATION -> if (isNotificationDetailExpanded) minOf(300.dp, screenWidthDp * 0.86f) else minOf(160.dp, screenWidthDp * 0.48f)
             IslandMode.CHARGING -> minOf(220.dp, screenWidthDp * 0.62f)
             IslandMode.TIMER -> minOf(270.dp, screenWidthDp * 0.76f)
             IslandMode.CUSTOM_TEXT -> minOf(270.dp, screenWidthDp * 0.76f)
@@ -207,11 +209,11 @@ fun DynamicIslandView(
     } else {
         when (mode) {
             IslandMode.COMPACT -> config.heightDp.dp.coerceIn(24.dp, 44.dp)
-            IslandMode.MEDIA -> if (isMediaDetailExpanded) 132.dp else 40.dp
+            IslandMode.MEDIA -> if (isMediaDetailExpanded) 132.dp else 36.dp
             IslandMode.CALL -> 76.dp
             IslandMode.NOTIFICATION -> if (isNotificationDetailExpanded) {
                 if (notification.canReply) 134.dp else 94.dp
-            } else 40.dp
+            } else 32.dp  // Thin pill for mini-peek
             IslandMode.CHARGING -> 52.dp
             IslandMode.TIMER -> 82.dp
             IslandMode.CUSTOM_TEXT -> 58.dp
@@ -319,17 +321,6 @@ fun DynamicIslandView(
         label = "pressScale"
     )
 
-    // Keyline tint border color calculation based on app brand color / active state
-    val keylineColor = remember(mode, notification.tintColor, mediaTrack.isPlaying) {
-        if (mode == IslandMode.NOTIFICATION && notification.tintColor != null) {
-            Color(notification.tintColor).copy(alpha = 0.40f)
-        } else if (mode == IslandMode.MEDIA && mediaTrack.isPlaying) {
-            Color(0xFF00FFB2).copy(alpha = 0.20f)
-        } else {
-            Color.White.copy(alpha = 0.08f)
-        }
-    }
-
     Box(
         modifier = modifier
             .let {
@@ -344,7 +335,7 @@ fun DynamicIslandView(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Box(
                 modifier = Modifier
@@ -353,11 +344,6 @@ fun DynamicIslandView(
                     .scale(pressScale)
                     .clip(pillShape)
                     .background(islandBgColor)
-                    .border(
-                        width = 0.75.dp,
-                        color = keylineColor,
-                        shape = pillShape
-                    )
                     .pointerInput(onIslandClick, onIslandDoubleClick, onSwipeLeft, onSwipeRight) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
@@ -533,51 +519,56 @@ fun DynamicIslandView(
                 }
             }
 
-            if (secondaryMode != null && secondaryMode != IslandMode.COMPACT) {
+            // Secondary bubble — only for queued notifications
+            if (secondaryMode == IslandMode.NOTIFICATION && pendingNotificationCount > 0) {
+                val nextIcon = remember(pendingNextNotification?.appIcon) {
+                    pendingNextNotification?.appIcon?.let {
+                        try { it.toBitmap().asImageBitmap() } catch (e: Exception) { null }
+                    }
+                }
                 Box(
                     modifier = Modifier
-                        .size(animatedHeight)
+                        .size(animatedHeight.coerceAtMost(36.dp))
                         .clip(CircleShape)
                         .background(islandBgColor)
-                        .border(0.75.dp, Color.White.copy(alpha = 0.08f), CircleShape)
                         .clickable { onSecondaryClick() }
-                        .padding(6.dp),
+                        .padding(4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    when (secondaryMode) {
-                        IslandMode.MEDIA -> {
-                            Icon(
-                                imageVector = Icons.Default.VolumeUp,
-                                contentDescription = null,
-                                tint = Color(0xFF00FFB2),
-                                modifier = Modifier.size(14.dp)
+                    if (nextIcon != null) {
+                        Image(
+                            bitmap = nextIcon,
+                            contentDescription = "Next notification",
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = Color(0xFF34C759),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    // Count badge
+                    if (pendingNotificationCount > 1) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF3B30)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "$pendingNotificationCount",
+                                color = Color.White,
+                                fontSize = 7.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
-                        IslandMode.TIMER -> {
-                            Icon(
-                                imageVector = Icons.Default.Timer,
-                                contentDescription = null,
-                                tint = Color(0xFFFF9500),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                        IslandMode.CALL -> {
-                            Icon(
-                                imageVector = Icons.Default.Call,
-                                contentDescription = null,
-                                tint = Color(0xFF30D158),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                        IslandMode.NOTIFICATION -> {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = null,
-                                tint = Color(0xFF34C759),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                        else -> {}
                     }
                 }
             }

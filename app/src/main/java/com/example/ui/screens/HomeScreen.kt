@@ -86,6 +86,8 @@ fun HomeScreen(
     chargingPercentage: Int,
     customMessage: String,
     secondaryIslandMode: IslandMode? = null,
+    pendingNotificationCount: Int = 0,
+    pendingNextNotification: IslandNotification? = null,
     onSecondaryClick: () -> Unit = {},
     isNotificationDetailExpanded: Boolean = false,
     onExpandNotificationDetail: () -> Unit = {},
@@ -289,6 +291,8 @@ fun HomeScreen(
             onResetTimer = onResetTimer,
             onCollapse = onCollapse,
             secondaryMode = secondaryIslandMode,
+            pendingNotificationCount = pendingNotificationCount,
+            pendingNextNotification = pendingNextNotification,
             onSecondaryClick = onSecondaryClick,
             modifier = Modifier
                 .statusBarsPadding()

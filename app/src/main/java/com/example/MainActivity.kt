@@ -104,6 +104,8 @@ fun AuraApp(viewModel: AuraViewModel = viewModel()) {
             val alertsHistory by viewModel.alertsHistory.collectAsStateWithLifecycle()
             val savedProfiles by viewModel.savedProfiles.collectAsStateWithLifecycle()
             val secondaryIslandMode by viewModel.secondaryIslandMode.collectAsStateWithLifecycle()
+            val pendingNotificationCount by viewModel.pendingNotificationCount.collectAsStateWithLifecycle()
+            val pendingNextNotification by viewModel.pendingNextNotification.collectAsStateWithLifecycle()
 
             var activePreviewParam by remember { mutableStateOf<GeometryParam?>(null) }
             val hideDock = activePreviewParam != null
@@ -200,6 +202,8 @@ fun AuraApp(viewModel: AuraViewModel = viewModel()) {
                                         chargingPercentage = chargingPercentage,
                                         customMessage = customMessage,
                                         secondaryIslandMode = secondaryIslandMode,
+                                        pendingNotificationCount = pendingNotificationCount,
+                                        pendingNextNotification = pendingNextNotification,
                                         onSecondaryClick = { viewModel.swapPrimaryAndSecondary() },
                                         isNotificationDetailExpanded = isNotificationDetailExpanded,
                                         onExpandNotificationDetail = { viewModel.expandNotificationDetail() },

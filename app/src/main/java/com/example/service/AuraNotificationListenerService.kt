@@ -138,6 +138,18 @@ class AuraNotificationListenerService : NotificationListenerService() {
 
         val notification = shouldGroupOrEmit(sbn, rawNotif, currentConfig.groupRapidNotifications)
         AuraEventBus.tryPostNotification(notification)
+
+        // Suppress the system notification popup — AURA is the sole notification display
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                snoozeNotification(sbn.key, Long.MAX_VALUE)
+            } else {
+                cancelNotification(sbn.key)
+            }
+        } catch (e: Exception) {
+            // Fallback: some OEMs don't support snooze
+            try { cancelNotification(sbn.key) } catch (_: Exception) {}
+        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
