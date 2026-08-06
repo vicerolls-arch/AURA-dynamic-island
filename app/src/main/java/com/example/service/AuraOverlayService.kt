@@ -223,97 +223,97 @@ class AuraOverlayService : Service() {
             setViewTreeSavedStateRegistryOwner(overlayLifecycleOwner)
 
             setContent {
-                val isAppForeground by AppForegroundTracker.isAppForeground.collectAsState()
+                val vm = AuraViewModel.activeInstance
 
-                if (!isAppForeground) {
-                    val vm = AuraViewModel.activeInstance
+                if (vm == null) {
+                    AuraTheme {
+                        DynamicIslandView(
+                            mode = islandMode,
+                            isExpanded = isExpanded,
+                            config = lastKnownConfig,
+                            mediaTrack = mediaTrack,
+                            incomingCall = incomingCall,
+                            notification = notification,
+                            timerState = timerState,
+                            chargingPercentage = chargingPercentage,
+                            customMessage = customMessage,
+                            onIslandClick = {
+                                if (islandMode == IslandMode.COMPACT) {
+                                    triggerMode(IslandMode.MEDIA, expand = true)
+                                } else {
+                                    isExpanded = !isExpanded
+                                }
+                            },
+                            onTogglePlayback = {
+                                mediaTrack = mediaTrack.copy(isPlaying = !mediaTrack.isPlaying)
+                            },
+                            onCollapse = {
+                                isExpanded = false
+                                islandMode = IslandMode.COMPACT
+                            },
+                            applyPositionOffset = false
+                        )
+                    }
+                } else {
+                    val configState by vm.config.collectAsState()
+                    val islandModeState by vm.islandMode.collectAsState()
+                    val isExpandedState by vm.isExpanded.collectAsState()
+                    val mediaTrackState by vm.mediaTrack.collectAsState()
+                    val incomingCallState by vm.incomingCall.collectAsState()
+                    val notificationState by vm.currentNotification.collectAsState()
+                    val timerStateState by vm.timerState.collectAsState()
+                    val chargingPercentageState by vm.chargingPercentage.collectAsState()
+                    val customMessageState by vm.customMessage.collectAsState()
+                    val isCustomizationPreviewActiveState by vm.isCustomizationPreviewActive.collectAsState()
+                    val isNotificationDetailExpandedState by vm.isNotificationDetailExpanded.collectAsState()
+                    val isMediaDetailExpandedState by vm.isMediaDetailExpanded.collectAsState()
+                    val secondaryIslandModeState by vm.secondaryIslandMode.collectAsState()
 
-                    if (vm == null) {
-                        AuraTheme {
-                            DynamicIslandView(
-                                mode = islandMode,
-                                isExpanded = isExpanded,
-                                config = lastKnownConfig,
-                                mediaTrack = mediaTrack,
-                                incomingCall = incomingCall,
-                                notification = notification,
-                                timerState = timerState,
-                                chargingPercentage = chargingPercentage,
-                                customMessage = customMessage,
-                                onIslandClick = {
-                                    if (islandMode == IslandMode.COMPACT) {
-                                        triggerMode(IslandMode.MEDIA, expand = true)
-                                    } else {
-                                        isExpanded = !isExpanded
-                                    }
-                                },
-                                onTogglePlayback = {
-                                    mediaTrack = mediaTrack.copy(isPlaying = !mediaTrack.isPlaying)
-                                },
-                                onCollapse = {
-                                    isExpanded = false
-                                    islandMode = IslandMode.COMPACT
-                                },
-                                applyPositionOffset = false
-                            )
-                        }
-                    } else {
-                        val configState by vm.config.collectAsState()
-                        val islandModeState by vm.islandMode.collectAsState()
-                        val isExpandedState by vm.isExpanded.collectAsState()
-                        val mediaTrackState by vm.mediaTrack.collectAsState()
-                        val incomingCallState by vm.incomingCall.collectAsState()
-                        val notificationState by vm.currentNotification.collectAsState()
-                        val timerStateState by vm.timerState.collectAsState()
-                        val chargingPercentageState by vm.chargingPercentage.collectAsState()
-                        val customMessageState by vm.customMessage.collectAsState()
-                        val isCustomizationPreviewActiveState by vm.isCustomizationPreviewActive.collectAsState()
-                        val isNotificationDetailExpandedState by vm.isNotificationDetailExpanded.collectAsState()
-                        val isMediaDetailExpandedState by vm.isMediaDetailExpanded.collectAsState()
-                        val secondaryIslandModeState by vm.secondaryIslandMode.collectAsState()
+                    lastKnownConfig = configState
 
-                        lastKnownConfig = configState
+                    LaunchedEffect(configState.offsetXDp, configState.offsetYDp, configState.widthDp, configState.heightDp, configState.backgroundColorHex, configState.backgroundAlpha) {
+                        updateWindowPosition(configState.offsetXDp, configState.offsetYDp)
+                    }
 
-                        LaunchedEffect(configState.offsetXDp, configState.offsetYDp) {
-                            updateWindowPosition(configState.offsetXDp, configState.offsetYDp)
-                        }
+                    LaunchedEffect(isNotificationDetailExpandedState) {
+                        updateWindowFocusable(isNotificationDetailExpandedState)
+                    }
 
-                        AuraTheme {
-                            DynamicIslandView(
-                                mode = islandModeState,
-                                isExpanded = isExpandedState,
-                                config = configState,
-                                mediaTrack = mediaTrackState,
-                                incomingCall = incomingCallState,
-                                notification = notificationState,
-                                timerState = timerStateState,
-                                chargingPercentage = chargingPercentageState,
-                                customMessage = customMessageState,
-                                isCustomizationPreviewActive = isCustomizationPreviewActiveState,
-                                isNotificationDetailExpanded = isNotificationDetailExpandedState,
-                                onExpandNotificationDetail = { vm.expandNotificationDetail() },
-                                isMediaDetailExpanded = isMediaDetailExpandedState,
-                                onExpandMediaDetail = { vm.expandMediaDetail() },
-                                onIslandClick = { vm.toggleIslandExpand() },
-                                onIslandDoubleClick = { vm.onIslandDoubleClick(this@AuraOverlayService) },
-                                onSwipeLeft = { vm.snoozeIsland() },
-                                onSwipeRight = { vm.dismissIslandUntilRelaunch() },
-                                onTogglePlayback = { vm.togglePlayback() },
-                                onSkipNext = { vm.skipNext() },
-                                onSkipPrevious = { vm.skipPrevious() },
-                                onSendReply = { key, text -> vm.sendReply(key, text) },
-                                onSilenceRinger = { vm.silenceRinger() },
-                                onAcceptCall = { vm.acceptCall() },
-                                onDeclineCall = { vm.declineCall() },
-                                onPauseTimer = { vm.pauseTimer() },
-                                onResumeTimer = { vm.resumeTimer() },
-                                onResetTimer = { vm.resetTimer() },
-                                onCollapse = { vm.collapseToCompact() },
-                                secondaryMode = secondaryIslandModeState,
-                                onSecondaryClick = { vm.swapPrimaryAndSecondary() },
-                                applyPositionOffset = false
-                            )
-                        }
+                    AuraTheme {
+                        DynamicIslandView(
+                            mode = islandModeState,
+                            isExpanded = isExpandedState,
+                            config = configState,
+                            mediaTrack = mediaTrackState,
+                            incomingCall = incomingCallState,
+                            notification = notificationState,
+                            timerState = timerStateState,
+                            chargingPercentage = chargingPercentageState,
+                            customMessage = customMessageState,
+                            isCustomizationPreviewActive = isCustomizationPreviewActiveState,
+                            isNotificationDetailExpanded = isNotificationDetailExpandedState,
+                            onExpandNotificationDetail = { vm.expandNotificationDetail() },
+                            isMediaDetailExpanded = isMediaDetailExpandedState,
+                            onExpandMediaDetail = { vm.expandMediaDetail() },
+                            onIslandClick = { vm.toggleIslandExpand() },
+                            onIslandDoubleClick = { vm.onIslandDoubleClick(this@AuraOverlayService) },
+                            onSwipeLeft = { vm.snoozeIsland() },
+                            onSwipeRight = { vm.dismissIslandUntilRelaunch() },
+                            onTogglePlayback = { vm.togglePlayback() },
+                            onSkipNext = { vm.skipNext() },
+                            onSkipPrevious = { vm.skipPrevious() },
+                            onSendReply = { key, text -> vm.sendReply(key, text) },
+                            onSilenceRinger = { vm.silenceRinger() },
+                            onAcceptCall = { vm.acceptCall() },
+                            onDeclineCall = { vm.declineCall() },
+                            onPauseTimer = { vm.pauseTimer() },
+                            onResumeTimer = { vm.resumeTimer() },
+                            onResetTimer = { vm.resetTimer() },
+                            onCollapse = { vm.collapseToCompact() },
+                            secondaryMode = secondaryIslandModeState,
+                            onSecondaryClick = { vm.swapPrimaryAndSecondary() },
+                            applyPositionOffset = false
+                        )
                     }
                 }
             }
@@ -352,6 +352,24 @@ class AuraOverlayService : Service() {
         }
     }
 
+    private fun updateWindowFocusable(focusable: Boolean) {
+        val params = overlayView?.layoutParams as? WindowManager.LayoutParams ?: return
+        val currentFlags = params.flags
+        val newFlags = if (focusable) {
+            currentFlags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        } else {
+            currentFlags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        }
+        if (newFlags != currentFlags) {
+            params.flags = newFlags
+            try {
+                windowManager?.updateViewLayout(overlayView, params)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     private fun setupReceiversAndListeners() {
         registerBatteryReceiver()
         setupTelephonyListener()
@@ -359,6 +377,14 @@ class AuraOverlayService : Service() {
     }
 
     private fun listenToEventBus() {
+        serviceScope.launch {
+            AuraEventBus.config.collect { newConfig ->
+                config = newConfig
+                lastKnownConfig = newConfig
+                updateWindowPosition(newConfig.offsetXDp, newConfig.offsetYDp)
+            }
+        }
+
         serviceScope.launch {
             AuraEventBus.notifications.collect { notif ->
                 if (config.enabledModules.contains("NOTIFICATION")) {

@@ -1,5 +1,9 @@
 package com.example.ui.components
 
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.ui.platform.LocalConfiguration
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.AnimationSpec
@@ -155,56 +159,62 @@ fun DynamicIslandView(
     val coroutineScope = rememberCoroutineScope()
     val deviceTier = remember(context) { DeviceCapability.detectTier(context) }
 
+    val flatNotif = remember { Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") }
+    val isNotifListenerActive = remember(flatNotif) { flatNotif != null && flatNotif.contains(context.packageName) }
+
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp.dp
+
     val isIdle = !isExpanded && mode == IslandMode.COMPACT && !mediaTrack.isPlaying && !isCustomizationPreviewActive
 
-    // Target Dimensions mapping state machine
+    // Responsive Target Dimensions mapping state machine ("medium tiny" balanced expansion)
     val targetWidth = if (isIdle) {
         when (config.islandShape) {
             IslandShape.DOT_EXPAND -> 12.dp
-            IslandShape.BROAD_DOCK -> (config.widthDp * 1.15f).dp.coerceAtLeast(180.dp)
-            IslandShape.NOTCH -> 120.dp
+            IslandShape.BROAD_DOCK -> minOf((config.widthDp * 1.15f).dp.coerceAtLeast(170.dp), screenWidthDp * 0.55f)
+            IslandShape.NOTCH -> 110.dp
         }
     } else if (!isExpanded) {
         when (config.islandShape) {
-            IslandShape.DOT_EXPAND -> config.widthDp.dp
-            IslandShape.BROAD_DOCK -> (config.widthDp * 1.25f).dp.coerceAtLeast(200.dp)
-            IslandShape.NOTCH -> config.widthDp.dp
+            IslandShape.DOT_EXPAND -> minOf(config.widthDp.dp, screenWidthDp * 0.55f)
+            IslandShape.BROAD_DOCK -> minOf((config.widthDp * 1.25f).dp.coerceAtLeast(190.dp), screenWidthDp * 0.60f)
+            IslandShape.NOTCH -> minOf(config.widthDp.dp, screenWidthDp * 0.55f)
         }
     } else {
         when (mode) {
-            IslandMode.COMPACT -> config.widthDp.dp
-            IslandMode.MEDIA -> if (isMediaDetailExpanded) 330.dp else 140.dp
-            IslandMode.CALL -> 320.dp
-            IslandMode.NOTIFICATION -> if (isNotificationDetailExpanded) 320.dp else 180.dp
-            IslandMode.CHARGING -> 240.dp
-            IslandMode.TIMER -> 290.dp
-            IslandMode.CUSTOM_TEXT -> 290.dp
+            IslandMode.COMPACT -> minOf(config.widthDp.dp, screenWidthDp * 0.55f)
+            IslandMode.MEDIA -> if (isMediaDetailExpanded) minOf(320.dp, screenWidthDp * 0.86f) else minOf(140.dp, screenWidthDp * 0.42f)
+            IslandMode.CALL -> minOf(300.dp, screenWidthDp * 0.84f)
+            IslandMode.NOTIFICATION -> if (isNotificationDetailExpanded) minOf(300.dp, screenWidthDp * 0.86f) else minOf(200.dp, screenWidthDp * 0.58f)
+            IslandMode.CHARGING -> minOf(220.dp, screenWidthDp * 0.62f)
+            IslandMode.TIMER -> minOf(270.dp, screenWidthDp * 0.76f)
+            IslandMode.CUSTOM_TEXT -> minOf(270.dp, screenWidthDp * 0.76f)
         }
     }
 
     val targetHeight = if (isIdle) {
         when (config.islandShape) {
             IslandShape.DOT_EXPAND -> 12.dp
-            IslandShape.BROAD_DOCK -> 22.dp
-            IslandShape.NOTCH -> 26.dp
+            IslandShape.BROAD_DOCK -> 20.dp
+            IslandShape.NOTCH -> 24.dp
         }
     } else if (!isExpanded) {
         when (config.islandShape) {
-            IslandShape.DOT_EXPAND -> config.heightDp.dp
-            IslandShape.BROAD_DOCK -> (config.heightDp * 0.85f).dp.coerceAtLeast(28.dp)
-            IslandShape.NOTCH -> (config.heightDp + 4).dp
+            IslandShape.DOT_EXPAND -> config.heightDp.dp.coerceIn(24.dp, 44.dp)
+            IslandShape.BROAD_DOCK -> (config.heightDp * 0.85f).dp.coerceAtLeast(26.dp)
+            IslandShape.NOTCH -> (config.heightDp + 2).dp
         }
     } else {
         when (mode) {
-            IslandMode.COMPACT -> config.heightDp.dp
-            IslandMode.MEDIA -> if (isMediaDetailExpanded) 168.dp else 40.dp
-            IslandMode.CALL -> 90.dp
+            IslandMode.COMPACT -> config.heightDp.dp.coerceIn(24.dp, 44.dp)
+            IslandMode.MEDIA -> if (isMediaDetailExpanded) 132.dp else 40.dp
+            IslandMode.CALL -> 76.dp
             IslandMode.NOTIFICATION -> if (isNotificationDetailExpanded) {
-                if (notification.canReply) 140.dp else 100.dp
-            } else 44.dp
-            IslandMode.CHARGING -> 56.dp
-            IslandMode.TIMER -> 86.dp
-            IslandMode.CUSTOM_TEXT -> 64.dp
+                if (notification.canReply) 134.dp else 94.dp
+            } else 40.dp
+            IslandMode.CHARGING -> 52.dp
+            IslandMode.TIMER -> 82.dp
+            IslandMode.CUSTOM_TEXT -> 58.dp
         }
     }
 
@@ -363,8 +373,8 @@ fun DynamicIslandView(
                                 if (config.vibrationFeedback) {
                                     HapticHelper.trigger(context, HapticType.IMPACT_MEDIUM)
                                 }
-                                // Long press triggers expanding / detail panel
-                                onIslandClick()
+                                // Long press: deep-link opens source app
+                                onIslandDoubleClick()
                             }
 
                             do {
@@ -401,11 +411,11 @@ fun DynamicIslandView(
                                     onSwipeRight()
                                 }
                             } else if (!longPressed) {
-                                // Short tap: deep-link opens source app
+                                // Single tap: expand / interact with dynamic island
                                 if (config.vibrationFeedback) {
                                     HapticHelper.trigger(context, HapticType.IMPACT_LIGHT)
                                 }
-                                onIslandDoubleClick()
+                                onIslandClick()
                             }
                         }
                     }
@@ -479,12 +489,14 @@ fun DynamicIslandView(
                                         if (isNotificationDetailExpanded) {
                                             ExpandedNotificationContent(
                                                 notification = notification,
+                                                isNotifListenerActive = isNotifListenerActive,
                                                 onSendReply = onSendReply,
                                                 onCollapse = onCollapse
                                             )
                                         } else {
                                             NotificationMiniPeek(
                                                 notification = notification,
+                                                isNotifListenerActive = isNotifListenerActive,
                                                 onTap = onExpandNotificationDetail
                                             )
                                         }
@@ -1104,9 +1116,11 @@ private fun ExpandedCallContent(
 @Composable
 private fun ExpandedNotificationContent(
     notification: IslandNotification,
+    isNotifListenerActive: Boolean,
     onSendReply: (key: String, text: String) -> Unit,
     onCollapse: () -> Unit
 ) {
+    val context = LocalContext.current
     var replyText by remember { mutableStateOf("") }
     val appIconBitmap = remember(notification.appIcon) {
         notification.appIcon?.let { drawable ->
@@ -1121,7 +1135,7 @@ private fun ExpandedNotificationContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
@@ -1135,28 +1149,28 @@ private fun ExpandedNotificationContent(
                         bitmap = appIconBitmap,
                         contentDescription = notification.appName,
                         modifier = Modifier
-                            .size(22.dp)
-                            .clip(RoundedCornerShape(6.dp)),
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(5.dp)),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(22.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(5.dp))
                             .background(Color(0xFF25D366)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = notification.appName.take(1).uppercase(),
                             color = Color.White,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Text(
                     text = notification.appName,
@@ -1166,24 +1180,46 @@ private fun ExpandedNotificationContent(
                 )
             }
 
-            Text(
-                text = notification.timeFormatted,
-                color = Color(0xFF8E9192),
-                fontSize = 11.sp
-            )
+            if (!isNotifListenerActive) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFFF3B30).copy(alpha = 0.25f))
+                        .clickable {
+                            val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "Grant Permission",
+                        color = Color(0xFFFF453A),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Text(
+                    text = notification.timeFormatted,
+                    color = Color(0xFF8E9192),
+                    fontSize = 11.sp
+                )
+            }
         }
 
-        Column {
+        Column(modifier = Modifier.padding(vertical = 2.dp)) {
             Text(
                 text = notification.sender,
                 color = Color.White,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = notification.message,
                 color = Color(0xFFE5E2E1),
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1193,7 +1229,7 @@ private fun ExpandedNotificationContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .padding(top = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -1214,7 +1250,7 @@ private fun ExpandedNotificationContent(
                         Box(contentAlignment = Alignment.CenterStart) {
                             if (replyText.isEmpty()) {
                                 Text(
-                                    text = "Reply...",
+                                    text = "Type reply...",
                                     color = Color.White.copy(alpha = 0.5f),
                                     fontSize = 12.sp
                                 )
@@ -1423,7 +1459,12 @@ private fun ExpandedCustomTextContent(message: String) {
 }
 
 @Composable
-private fun NotificationMiniPeek(notification: IslandNotification, onTap: () -> Unit) {
+private fun NotificationMiniPeek(
+    notification: IslandNotification,
+    isNotifListenerActive: Boolean,
+    onTap: () -> Unit
+) {
+    val context = LocalContext.current
     val imageBitmap = remember(notification.appIcon) {
         notification.appIcon?.let {
             try {
@@ -1438,41 +1479,90 @@ private fun NotificationMiniPeek(notification: IslandNotification, onTap: () -> 
         modifier = Modifier
             .fillMaxSize()
             .clickable(onClick = onTap)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF34C759)),
-            contentAlignment = Alignment.Center
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f)
         ) {
-            Icon(
-                Icons.Default.Notifications,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(7.dp)
-            )
-        }
-        if (imageBitmap != null) {
-            Image(
-                bitmap = imageBitmap,
-                contentDescription = notification.appName,
+            Box(
                 modifier = Modifier
                     .size(20.dp)
                     .clip(CircleShape)
+                    .background(Color(0xFF34C759)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Notifications,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(11.dp)
+                )
+            }
+
+            if (imageBitmap != null) {
+                Image(
+                    bitmap = imageBitmap,
+                    contentDescription = notification.appName,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF25D366)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = notification.appName.take(1).uppercase(),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            val briefWord = remember(notification.appName) {
+                if (notification.appName.isNotBlank()) notification.appName.split(" ").first() else "Alert"
+            }
+
+            Text(
+                text = briefWord,
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        Text(
-            text = notification.appName,
-            color = Color.White,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+
+        if (!isNotifListenerActive) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFFF9500).copy(alpha = 0.25f))
+                    .clickable {
+                        val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "Grant",
+                    color = Color(0xFFFF9500),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
     }
 }
 

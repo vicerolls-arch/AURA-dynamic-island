@@ -343,6 +343,14 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleIslandExpand() {
         autoCollapseJob?.cancel()
+        if (_islandMode.value == IslandMode.NOTIFICATION) {
+            if (!_isNotificationDetailExpanded.value) {
+                expandNotificationDetail()
+            } else {
+                collapseToCompact()
+            }
+            return
+        }
         if (_mediaTrack.value.isPlaying) {
             if (_islandMode.value == IslandMode.MEDIA && _isExpanded.value) {
                 if (_isMediaDetailExpanded.value) {
